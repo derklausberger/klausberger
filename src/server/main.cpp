@@ -10,7 +10,7 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::Status;
 
-using um::UmTest;
+using um::UM;
 using um::UmRequest;
 using um::UmReply;
 
@@ -20,6 +20,8 @@ class UmServiceImplementation final : public UM::Service {
         const UmRequest* request,
         UmReply* reply
     ) override {
+
+	context = context;
         string msg = request->msg();
 
         reply->set_result(msg + " erfolgreich!´");
@@ -43,7 +45,7 @@ void Run() {
     server->Wait();
 }
 
-int main(int argc, char** argv) {
+int main() {
     Run();
 
     return 0;

@@ -9,15 +9,15 @@ using grpc::Channel;
 using grpc::ClientContext;
 using grpc::Status;
 
-using um::UmTest;
+using um::UM;
 using um::UmRequest;
 using um::UmReply;
 
 class UmTestClient {
     private:
-        std::unique_ptr<UmTest::Stub> stub_;
+        std::unique_ptr<UM::Stub> stub_;
     public:
-        UmTestClient(std::shared_ptr<Channel> channel) : stub_(UmTest::NewStub(channel)) {}
+        UmTestClient(std::shared_ptr<Channel> channel) : stub_(UM::NewStub(channel)) {}
 
     string sendRequest(string msg) {
         UmRequest request;
@@ -34,7 +34,7 @@ class UmTestClient {
             return reply.result();
         } else {
             std::cout << status.error_code() << ": " << status.error_message() << std::endl;
-            return -1;
+            return "-1";
         }
     }
 };
@@ -52,11 +52,11 @@ void Run() {
 
     string msg = "Test";
 
-    response = client.sendRequest(a, b);
+    response = client.sendRequest(msg);
     std::cout << "Answer received: " << msg << " " << response << std::endl;
 }
 
-int main(int argc, char* argv[]){
+int main(){
     Run();
 
     return 0;
