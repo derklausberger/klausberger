@@ -12,9 +12,11 @@ private:
 public:
     Manager () {}
 
-    void add_user(std::string name, std::string pw) {
-        users.push_back(new User(name, pw));
-    }
-}
+    void print();
+
+    bool contains(std::string username);
+
+    void add(std::string name, std::string pw);
+};
 
 #endif /* end of inclde guard:  */
