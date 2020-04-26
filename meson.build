@@ -15,24 +15,25 @@ gen = generator(protoc, \
 
 generated = gen.process('src/um.proto')
 
-inc_dir = include_directories('include/client')
+inc_dir = include_directories('include')
+inc_client = include_directories('include/client')
 
 src_client = ['src/client/main.cpp', generated]
 
 executable('client',
            sources : src_client,
-           include_directories : [inc_dir],#, inc_client],
+           include_directories : [inc_dir, inc_client],
            dependencies : [threads, protobuf_dep, grpc_dep,
            grpcpp_dep]
           )
 
-inc_dir = include_directories('include/server')
+inc_server = include_directories('include/server')
 
-src_client = ['src/server/main.cpp', generated]
+src_client = ['src/server/main.cpp', 'src/user.cpp', 'src/server/manager.cpp', generated]
 
 executable('server',
            sources : src_client,
-           include_directories : [inc_dir],#, inc_client],
+           include_directories : [inc_dir, inc_server],
            dependencies : [threads, protobuf_dep, grpc_dep,
            grpcpp_dep]
           )

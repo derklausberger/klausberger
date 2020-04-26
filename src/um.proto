@@ -10,7 +10,7 @@ service UM {
     rpc sendRequest (UmRequest) returns (UmReply) {}
 }
 
-// The request message containing requested numbers
+// The request message containing requested answer
 message UmRequest {
     string msg = 1;
 }

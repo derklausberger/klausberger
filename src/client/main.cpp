@@ -40,7 +40,7 @@ class UmTestClient {
 };
 
 void Run() {
-    std::string address("0.0.0.0:8888");
+    std::string address("localhost:8888");
     UmTestClient client(
         grpc::CreateChannel(
             address,
@@ -50,10 +50,13 @@ void Run() {
 
     string response;
 
-    string msg = "Test";
+    string msg;
+
+	cout << "Name: ";
+	cin >> msg;
 
     response = client.sendRequest(msg);
-    std::cout << "Answer received: " << msg << " " << response << std::endl;
+    std::cout << "Answer received: " << response << std::endl;
 }
 
 int main(){
