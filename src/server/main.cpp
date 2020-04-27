@@ -50,97 +50,129 @@ int clp(int argc, char *argv[], Manager *manager) {
        << " add with -a,--add,\n"
        << " delete with -d,--delete)";
     string user;
-    app.add_option("-u,--user", user, ss.str());
+    auto user_opt = app.add_option("-u,--user", user, ss.str());
     ss.str(string());
+
+    auto user_operations = app.add_option_group("User-Options")
+        ->require_option(0, 1);
+
+    bool list = false;
+    user_operations
+        ->add_flag("-l,--list", list, "Prints list of all users")
+        ->excludes(user_opt);
 
     ss << "Set password for new user\n"
        << " or for existing user\n"
-       << " (username needed,\n"
-       << " set username with -u,--user)";
-    string password;
-    app.add_option("-p,--password", password, ss.str());
-    bool list;
-    app.add_flag("-l,--list", list, "Prints list of all users");
+       << " (--modify or --add needs to be set)";
+    string pw;
+    auto pw_opt = app.add_option("-p,--password", pw, ss.str())
+      ->needs(user_opt);
     ss.str(string());
 
-    ss << "Add new user"
-       << " (username and password needed,\n"
-       << " set username with -u,--user,\n"
-       << " set password with -p,--password)";
-    bool add;
-    app.add_flag("-a,--add", add, ss.str());
+    ss << "Add new user";
+    bool add_user = false;
+    user_operations
+        ->add_flag("-a,--add", add_user, ss.str())->needs(user_opt, pw_opt);  //->needs(opt_password);
     ss.str(string());
 
-    ss << "Modify existing user\n"
-       << " (new username and/or new password needed,\n"
-       << " set new password with -p,--password,\n"
-       << " set new username with -n,--new)";
-    bool modify;
-    app.add_flag("-m,--modify", modify, ss.str());
+    ss << "Modify existing user";
+    bool mod_user = false;
+    auto mod_user_opt = user_operations
+        ->add_flag("-m,--modify", mod_user, ss.str())->needs(user_opt);
     ss.str(string());
 
-    ss << "Delete existing user"
-       << " (username needed,\n"
-       << " set username with -u,--user)";
-    bool del;
-    app.add_flag("-d,--delete", del, ss.str());
+    ss << "Set new username for existing user";
+    string new_name;
+    app.add_option("-n,--new-name", new_name, ss.str())
+      ->needs(user_opt, mod_user_opt);
     ss.str(string());
+
+    ss << "Delete existing user";
+    bool del_user = false;
+    user_operations
+        ->add_flag("-d,--delete", del_user, ss.str())->needs(user_opt);
+    ss.str(string());
+
 
     ss << "Select object by name\n"
-       << " (username needed,\n"
-       << " set username with -u,--user)\n"
        << "  (list existing rights with --list-rights,\n"
        << "  modify existing rights with --modify-rights,\n"
        << "  add new rights with --add-rights,\n"
        << "  delete existing rights with --delete-rights)";
-    string object;
-    app.add_flag("-o,--object", object, ss.str());
+    string obj;
+    auto obj_opt = app.add_flag("-o,--object", obj, ss.str())
+        ->needs(user_opt);
     ss.str(string());
 
-    ss << "list existing rights\n"
-       << " (object needed,\n"
-       << " set object with -o,--object)";
-    bool list_rights;
-    app.add_flag("--list-rights", list_rights, ss.str());
+    auto right_operations = app.add_option_group("Right-Options")
+        ->require_option(0, 1);
+
+    ss << "List existing rights";
+    bool list_rights = false;
+    auto list_obj_opt = right_operations
+        ->add_flag("--list-rights", list_rights, ss.str())
+        ->needs(user_opt, obj_opt);
     ss.str(string());
 
-    ss << "modify existing rights\n"
-       << " (object needed,\n"
-       << " set object with -o,--object)";
+    ss << "Modify existing rights";
     string modify_rights;
-    app.add_option("--modify-rights", modify_rights, ss.str());
+    auto mod_obj_opt = right_operations
+        ->add_option("--mod-rights", modify_rights, ss.str())
+        ->needs(user_opt, obj_opt);
     ss.str(string());
 
-    ss << "add new rights\n"
-       << " (object needed,\n"
-       << " set object with -o,--object)";
+    ss << "Add new rights";
     string add_rights;
-    app.add_option("--add-rights", add_rights, ss.str());
+    auto add_obj_opt = right_operations
+        ->add_option("--add-rights", add_rights, ss.str())
+        ->needs(user_opt, obj_opt);
     ss.str(string());
 
-    ss << "delete existing rights\n"
-       << " (object needed,\n"
-       << " set object with -o,--object)";
-    bool delete_rights;
-    app.add_flag("--delete-rights", delete_rights, ss.str());
+    ss << "Delete existing rights";
+    bool del_rights = false;
+    auto del_obj_opt = right_operations
+        ->add_flag("--del-rights", del_rights, ss.str())
+        ->needs(user_opt, obj_opt);
     ss.str(string());
 
     //add object, remove object, list objects, modify objects ???
+
+    // list, add, mod, del
 
     try {
         app.parse(argc, argv);
 
         if (list) {
             manager->print();
-        } else if (add) {
-            //cout << "Username: " << flush;
-            //getline(cin, input);
-
-            if (!manager->contains(user)) {
-                manager->add(user, "");
-            } else {
-                // if user already exists
+        } else if (add_user) {
+            if (!manager->add(user, pw)) {
+                cerr << "user already exists" << endl;
             }
+        } else if (mod_user) {
+            if (manager->contains(user)) {
+                if (pw.empty() && new_name.empty()) {
+                    cerr << "-m,--modify requires at least user or password" << endl;
+                } else {
+                    if (!pw.empty()) {
+                        // cout << "pw" << endl;
+                        manager->mod_pw(user, pw);
+                    }
+                    if (!new_name.empty()) {
+                        // cout << "name" << endl;
+                        manager->mod_name(user, new_name);
+                    }
+                }
+            } else {
+                cerr << "user does not exist" << endl;
+            }
+        } else if (del_user) {
+            if (!manager->del(user)) {
+                cerr << "user does not exist" << endl;
+            }
+        } else if (list_rights) {
+            //manager->print_rights(user);
+        } else if (!add_rights.empty()) {
+            //manager->add_rights(user, add_rights);
         }
 
         //cout << list << " " << user << endl;

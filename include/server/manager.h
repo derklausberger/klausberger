@@ -14,9 +14,15 @@ public:
 
     void print();
 
-    bool contains(std::string username);
+    bool contains(std::string);
 
-    void add(std::string name, std::string pw);
+    bool add(std::string, std::string);
+
+    bool mod_pw(std::string, std::string);
+
+    bool mod_name(std::string, std::string);
+
+    bool del(std::string);
 };
 
 #endif /* end of inclde guard:  */
