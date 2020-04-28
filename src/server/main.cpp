@@ -89,7 +89,7 @@ int clp(int argc, char *argv[], Manager *manager) {
 
     ss << "Delete existing user";
     bool del_user = false;
-    user_operations
+    auto del_user_opt = user_operations
         ->add_flag("-d,--delete", del_user, ss.str())->needs(user_opt);
     ss.str(string());
 
@@ -100,44 +100,38 @@ int clp(int argc, char *argv[], Manager *manager) {
        << "  add new rights with --add-rights,\n"
        << "  delete existing rights with --delete-rights)";
     string obj;
-    auto obj_opt = app.add_flag("-o,--object", obj, ss.str())
-        ->needs(user_opt);
+    auto obj_opt = app.add_option("-o,--object", obj, ss.str())
+        ->needs(user_opt)->excludes(del_user_opt, mod_user_opt);
     ss.str(string());
 
     auto right_operations = app.add_option_group("Right-Options")
         ->require_option(0, 1);
 
-    ss << "List existing rights";
+    ss << "List existing rights\n"
+       << " from user or user and object";
     bool list_rights = false;
     auto list_obj_opt = right_operations
         ->add_flag("--list-rights", list_rights, ss.str())
-        ->needs(user_opt, obj_opt);
+        ->needs(user_opt);
     ss.str(string());
 
-    ss << "Modify existing rights";
-    string modify_rights;
-    auto mod_obj_opt = right_operations
-        ->add_option("--mod-rights", modify_rights, ss.str())
-        ->needs(user_opt, obj_opt);
-    ss.str(string());
-
-    ss << "Add new rights";
-    string add_rights;
-    auto add_obj_opt = right_operations
-        ->add_option("--add-rights", add_rights, ss.str())
-        ->needs(user_opt, obj_opt);
+    ss << "Set or modify rights\n"
+       << " 4 letters in correct order: rwxd\n"
+       << " replace letter with - to not set or delete right";
+    string rights;
+    auto set_obj_opt = right_operations
+        ->add_option("-s,--set-rights", rights, ss.str())
+        ->needs(user_opt, obj_opt)->excludes(list_obj_opt);
     ss.str(string());
 
     ss << "Delete existing rights";
-    bool del_rights = false;
-    auto del_obj_opt = right_operations
-        ->add_flag("--del-rights", del_rights, ss.str())
-        ->needs(user_opt, obj_opt);
+    bool rem_rights = false;
+    right_operations
+        ->add_flag("-r,--remove-rights", rem_rights, ss.str())
+        ->needs(user_opt, obj_opt)->excludes(set_obj_opt, list_obj_opt);
     ss.str(string());
 
     //add object, remove object, list objects, modify objects ???
-
-    // list, add, mod, del
 
     try {
         app.parse(argc, argv);
@@ -151,7 +145,8 @@ int clp(int argc, char *argv[], Manager *manager) {
         } else if (mod_user) {
             if (manager->contains(user)) {
                 if (pw.empty() && new_name.empty()) {
-                    cerr << "-m,--modify requires at least user or password" << endl;
+                    cerr << "-m,--modify requires at least user or password"
+                        << endl;
                 } else {
                     if (!pw.empty()) {
                         // cout << "pw" << endl;
@@ -170,12 +165,23 @@ int clp(int argc, char *argv[], Manager *manager) {
                 cerr << "user does not exist" << endl;
             }
         } else if (list_rights) {
-            //manager->print_rights(user);
-        } else if (!add_rights.empty()) {
-            //manager->add_rights(user, add_rights);
+            manager->print_rights(user, obj);
+        } else if (!obj.empty()) {
+            if (!rights.empty()) {
+                if (!manager->set_right(user, obj, rights)) {
+                    cerr << "Error: rights are not formatted correctly\n"
+                        << " make sure the order matches: rwxd" << endl;
+                }
+            } else if (rem_rights) {
+                if (!manager->rem_right(user, obj)) {
+                    cerr << "Error: no existing rights for user refering to"
+                        << " object" << endl;
+                }
+            } else {
+                cerr << "object requires 1 of following options: -s,-d,-l"
+                    << endl;
+            }
         }
-
-        //cout << list << " " << user << endl;
     } catch (const CLI::ParseError &e) {
         return app.exit(e);
     }

@@ -23,6 +23,12 @@ public:
     bool mod_name(std::string, std::string);
 
     bool del(std::string);
+
+    bool set_right(std::string, std::string, std::string);
+
+    bool rem_right(std::string, std::string);
+
+    void print_rights(std::string, std::string);
 };
 
 #endif /* end of inclde guard:  */

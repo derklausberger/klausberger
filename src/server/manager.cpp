@@ -63,3 +63,35 @@ bool Manager::del(string name) {
 
     return false;
 }
+
+bool Manager::set_right(string name, string object, string right) {
+    for (auto& user : users) {
+        if (user.get_name().compare(name) == 0) {
+            return user.set_right(object, right);
+        }
+    }
+
+    return false;
+}
+
+bool Manager::rem_right(string name, string object) {
+    for (auto& user : users) {
+        if (user.get_name().compare(name) == 0) {
+            return user.rem_right(object);
+        }
+    }
+
+    return false;
+}
+
+void Manager::print_rights(string name, string object) {
+    for (auto& user : users) {
+        if (user.get_name().compare(name) == 0) {
+            if (!object.empty()) {
+                user.print_rights(object);
+            } else {
+                user.print_rights();
+            }
+        }
+    }
+}

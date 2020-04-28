@@ -2,6 +2,7 @@
 #define USER_H
 
 #include <string>
+#include <map>
 #include <list>
 
 // erster Buchstabe ist groß, weil delete ein Schlüsselwort ist und
@@ -13,7 +14,7 @@ private:
     std::string name;
     std::string pw;
 
-    std::list<Action> rights;
+    std::map<std::string, std::list<Action>> rights;
 public:
     User (std::string _name, std::string _pw) : name{_name}, pw{_pw} {}
 
@@ -29,7 +30,13 @@ public:
 
     bool operator == (const User& user) const { return name == user.name; }
 
-    //bool add_rights(std::string);
+    bool set_right(std::string, std::string);
+
+    bool rem_right(std::string);
+
+    void print_rights(std::string);
+
+    void print_rights();
 };
 
 #endif /* end of include guard:  */
