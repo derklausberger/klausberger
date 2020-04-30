@@ -26,6 +26,14 @@ Manager manager{};
 list<User*> connections;
 
 class UmServiceImplementation final : public UM::Service {
+private:
+    Manager* manager;
+    list<User*>* connections;
+public:
+    UmServiceImplementation(Manager* manager_,
+        list<User*>* connections_) : manager{manager_},
+        connections{connections_}{}
+
     Status Login(
         ServerContext* context,
         const LoginRequest* request,
@@ -35,17 +43,17 @@ class UmServiceImplementation final : public UM::Service {
         string user = request->user();
         string pw = request->pw();
 
-        if (!manager.contains(user)) {
+        if (!manager->contains(user)) {
             reply->set_result("login failed!\n" + user + " does not exist");
             cout << user << " tried to connect! (user does not exist)" << endl;
             return Status::CANCELLED;
-        } else if (!manager.login(user, pw)){
+        } else if (!manager->login(user, pw)){
             reply->set_result("login failed!\nwrong password for " + user);
             cout << user << " tried to connect! (wrong password)" << endl;
             return Status::CANCELLED;
-        } else if (manager.login(user, pw)) {
+        } else if (manager->login(user, pw)) {
             // Add the new connection to the list of the connected clients
-            connections.push_back(manager.get_user(user));
+            connections->push_back(manager->get_user(user));
 
             // Send a welcome message to the connected client
             reply->set_result("login successful!\nwelcome " + user);
@@ -53,6 +61,8 @@ class UmServiceImplementation final : public UM::Service {
             // Output new connection
             cout << user << " connected!" << endl;
             return Status::OK;
+        } else {
+            return Status::CANCELLED;
         }
     }
 };
@@ -230,25 +240,25 @@ grpc::string readFile(const grpc::string& filename) {
 
 void Run() {
     std::string address("localhost:8888");
-    UmServiceImplementation service;
+    UmServiceImplementation service{&manager, &connections};
 
     ServerBuilder builder;
 
     grpc::SslServerCredentialsOptions sslOpts{};
-    /* für client-seitige Authentifizierung
+    // für client-seitige Authentifizierung
     sslOpts.client_certificate_request =
     GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;
-    */
+
     sslOpts.pem_key_cert_pairs.push_back(
        grpc::SslServerCredentialsOptions::PemKeyCertPair{
          readFile("../openssl/server.key"),
          readFile("../openssl/server.crt")});
     // für client-seitige Authentifizierung
-    sslOpts.pem_root_certs = readFile("../openssl/client.crt");
+    //sslOpts.pem_root_certs = readFile("../openssl/client.crt");
 
     auto creds = grpc::SslServerCredentials(sslOpts);
 
-    //grpc::SslServerCredentialsOptions::PemKeyCertPair pkcp ={"a","b"};
+    //grpc::SslServerCredentialsOptions::PemKeyCertPair pkcp ={};
     //grpc::SslServerCredentialsOptions ssl_opts;
     //ssl_opts.pem_root_certs="";
     //ssl_opts.pem_key_cert_pairs.push_back(pkcp);

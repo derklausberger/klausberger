@@ -77,7 +77,7 @@ void Run() {
 
     // Create a default SSL ChannelCredentials object.
     auto ssl_channel_creds
-        = grpc::SslCredentials(sslOpts);// grpc::SslCredentialsOptions());
+        = grpc::SslCredentials(sslOpts);
 
     // Create a default Google ChannelCredentials object.
     //auto gtb_channel_creds = grpc::GoogleDefaultCredentials();
