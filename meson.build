@@ -1,4 +1,4 @@
-project('grpc-pro', 'cpp',
+project('grpc-project', 'cpp',
         default_options : ['cpp_std=c++11'])
 
 protoc = find_program('protoc', required : true)

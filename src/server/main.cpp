@@ -9,6 +9,7 @@
 #include <string>
 #include <stdio.h>
 #include <sstream>
+#include <fstream>
 
 using namespace std;
 
@@ -18,26 +19,46 @@ using grpc::ServerContext;
 using grpc::Status;
 
 using um::UM;
-using um::UmRequest;
-using um::UmReply;
+using um::LoginRequest;
+using um::LoginReply;
+
+Manager manager{};
+list<User*> connections;
 
 class UmServiceImplementation final : public UM::Service {
-    Status sendRequest(
+    Status Login(
         ServerContext* context,
-        const UmRequest* request,
-        UmReply* reply
+        const LoginRequest* request,
+        LoginReply* reply
     ) override {
         context = context;
-        string msg = request->msg();
+        string user = request->user();
+        string pw = request->pw();
 
-        reply->set_result("Hallo " + msg);
-		cout << msg << " connected!" << endl;
-        return Status::OK;
+        if (!manager.contains(user)) {
+            reply->set_result("login failed!\n" + user + " does not exist");
+            cout << user << " tried to connect! (user does not exist)" << endl;
+            return Status::CANCELLED;
+        } else if (!manager.login(user, pw)){
+            reply->set_result("login failed!\nwrong password for " + user);
+            cout << user << " tried to connect! (wrong password)" << endl;
+            return Status::CANCELLED;
+        } else if (manager.login(user, pw)) {
+            // Add the new connection to the list of the connected clients
+            connections.push_back(manager.get_user(user));
+
+            // Send a welcome message to the connected client
+            reply->set_result("login successful!\nwelcome " + user);
+
+            // Output new connection
+            cout << user << " connected!" << endl;
+            return Status::OK;
+        }
     }
 };
 
 // command line processing
-int clp(int argc, char *argv[], Manager *manager) {
+int clp(int argc, char *argv[]) {
     CLI::App app{"Manages users and rights"};
     //CLI11_PARSE(app, result.size(), result.data());
 
@@ -137,43 +158,43 @@ int clp(int argc, char *argv[], Manager *manager) {
         app.parse(argc, argv);
 
         if (list) {
-            manager->print();
+            manager.print();
         } else if (add_user) {
-            if (!manager->add(user, pw)) {
+            if (!manager.add(user, pw)) {
                 cerr << "user already exists" << endl;
             }
         } else if (mod_user) {
-            if (manager->contains(user)) {
+            if (manager.contains(user)) {
                 if (pw.empty() && new_name.empty()) {
                     cerr << "-m,--modify requires at least user or password"
                         << endl;
                 } else {
                     if (!pw.empty()) {
                         // cout << "pw" << endl;
-                        manager->mod_pw(user, pw);
+                        manager.mod_pw(user, pw);
                     }
                     if (!new_name.empty()) {
                         // cout << "name" << endl;
-                        manager->mod_name(user, new_name);
+                        manager.mod_name(user, new_name);
                     }
                 }
             } else {
                 cerr << "user does not exist" << endl;
             }
         } else if (del_user) {
-            if (!manager->del(user)) {
+            if (!manager.del(user)) {
                 cerr << "user does not exist" << endl;
             }
         } else if (list_rights) {
-            manager->print_rights(user, obj);
+            manager.print_rights(user, obj);
         } else if (!obj.empty()) {
             if (!rights.empty()) {
-                if (!manager->set_right(user, obj, rights)) {
+                if (!manager.set_right(user, obj, rights)) {
                     cerr << "Error: rights are not formatted correctly\n"
                         << " make sure the order matches: rwxd" << endl;
                 }
             } else if (rem_rights) {
-                if (!manager->rem_right(user, obj)) {
+                if (!manager.rem_right(user, obj)) {
                     cerr << "Error: no existing rights for user refering to"
                         << " object" << endl;
                 }
@@ -189,11 +210,49 @@ int clp(int argc, char *argv[], Manager *manager) {
     return 0;
 }
 
+grpc::string readFile(const grpc::string& filename) {
+    string data;
+    ifstream file(filename.c_str(), ios::in);
+
+  	if (file.is_open()) {
+  		stringstream ss;
+  		ss << file.rdbuf ();
+
+  		file.close ();
+
+  		data = ss.str ();
+  	} else {
+        cout << "fehler" << filename << endl;
+    }
+
+    return data;
+}
+
 void Run() {
     std::string address("localhost:8888");
     UmServiceImplementation service;
 
     ServerBuilder builder;
+
+    grpc::SslServerCredentialsOptions sslOpts{};
+    /* für client-seitige Authentifizierung
+    sslOpts.client_certificate_request =
+    GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;
+    */
+    sslOpts.pem_key_cert_pairs.push_back(
+       grpc::SslServerCredentialsOptions::PemKeyCertPair{
+         readFile("../openssl/server.key"),
+         readFile("../openssl/server.crt")});
+    // für client-seitige Authentifizierung
+    sslOpts.pem_root_certs = readFile("../openssl/client.crt");
+
+    auto creds = grpc::SslServerCredentials(sslOpts);
+
+    //grpc::SslServerCredentialsOptions::PemKeyCertPair pkcp ={"a","b"};
+    //grpc::SslServerCredentialsOptions ssl_opts;
+    //ssl_opts.pem_root_certs="";
+    //ssl_opts.pem_key_cert_pairs.push_back(pkcp);
+    //std::shared_ptr<grpc::ServerCredentials> creds = grpc::SslServerCredentials(grpc::SslServerCredentialsOptions());
 
     builder.AddListeningPort(address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -202,8 +261,6 @@ void Run() {
     std::cout << "Server listening on port: " << address << std::endl;
 
     //server->Wait();
-
-    Manager manager{};
 
     string server_str = "./server";
     char *server_name = new char[server_str.size()+1];
@@ -228,7 +285,7 @@ void Run() {
                 result.push_back(c);
             }
 
-            clp(result.size(), result.data(), &manager);
+            clp(result.size(), result.data());
         } else {
         }
     }

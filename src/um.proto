@@ -7,15 +7,16 @@ package um;
 // Defines the service
 service UM {
     // Function invoked to send the request
-    rpc sendRequest (UmRequest) returns (UmReply) {}
+    rpc Login (LoginRequest) returns (LoginReply) {}
 }
 
 // The request message containing requested answer
-message UmRequest {
-    string msg = 1;
+message LoginRequest {
+    string user = 1;
+    string pw = 2;
 }
 
 // The response message containing response
-message UmReply {
+message LoginReply {
     string result = 1;
 }
