@@ -17,13 +17,35 @@ using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::Status;
+using grpc::StatusCode;
 
 using um::UM;
 using um::LoginRequest;
 using um::LoginReply;
+using um::ListRequest;
+using um::ListReply;
+using um::DeleteRequest;
+using um::DeleteReply;
+using um::ReadRequest;
+using um::ReadReply;
+using um::WriteRequest;
+using um::WriteReply;
+using um::ExecuteRequest;
+using um::ExecuteReply;
 
 Manager manager{};
 list<User*> connections;
+string servername;
+
+User* connected(string name) {
+    for (auto& user : connections) {
+        if (user->get_name().compare(name) == 0) {
+            return user;
+        }
+    }
+
+    return nullptr;
+}
 
 class UmServiceImplementation final : public UM::Service {
 private:
@@ -44,22 +66,186 @@ public:
         string pw = request->pw();
 
         if (!manager->contains(user)) {
-            reply->set_result("login failed!\n" + user + " does not exist");
+            stringstream reply;
+            reply << "login failed!\n" << user << " does not exist!";
+
             cout << user << " tried to connect! (user does not exist)" << endl;
-            return Status::CANCELLED;
+            cout << servername << "$ " << flush;
+
+            return Status(StatusCode::CANCELLED, reply.str());
         } else if (!manager->login(user, pw)){
-            reply->set_result("login failed!\nwrong password for " + user);
+            stringstream reply;
+            reply << "login failed!\nwrong password for " << user;
+
             cout << user << " tried to connect! (wrong password)" << endl;
-            return Status::CANCELLED;
+            cout << servername << "$ " << flush;
+
+            return Status(StatusCode::CANCELLED, reply.str());
         } else if (manager->login(user, pw)) {
             // Add the new connection to the list of the connected clients
             connections->push_back(manager->get_user(user));
 
             // Send a welcome message to the connected client
-            reply->set_result("login successful!\nwelcome " + user);
+            reply->set_result("login successful!\nwelcome " + user + "!");
 
             // Output new connection
             cout << user << " connected!" << endl;
+            cout << servername << "$ " << flush;
+
+            return Status::OK;
+        } else {
+            return Status::CANCELLED;
+        }
+    }
+
+    User* connected(string name) {
+        for (auto& user : *connections) {
+            if (user->get_name().compare(name) == 0) {
+                return user;
+            }
+        }
+
+        return nullptr;
+    }
+
+    Status ListRights(
+        ServerContext* context,
+        const ListRequest* request,
+        ListReply* reply
+    ) override {
+        context = context;
+        string username = request->user();
+        string object = request->obj();
+
+        User* user = connected(username);
+        if (user != nullptr) {
+            if (!object.empty()) {
+                if (user->has_rights_for_obj(object)) {
+                    reply->set_result(user->get_rights(object));
+                } else {
+                    reply->set_result("No assigned rights for this object");
+                }
+                cout << user->get_name() << " requested his rights for object "
+                    << object << endl;
+                cout << servername << "$ " << flush;
+            } else {
+                reply->set_result(user->get_rights());
+                cout << endl << user->get_name() << " requested his rights." << endl;
+                cout << servername << "$ " << flush;
+            }
+            return Status::OK;
+        } else {
+            return Status::CANCELLED;
+        }
+    }
+
+    Status Delete(
+        ServerContext* context,
+        const DeleteRequest* request,
+        DeleteReply* reply
+    ) override {
+        context = context;
+        string username = request->user();
+        string object = request->obj();
+
+        User* user = connected(username);
+        if (user != nullptr) {
+            if (user->has_rights_for_obj(object)) {
+                if (user->allowed_to_delete(object)) {
+                    reply->set_result("Delete successful!");
+                } else {
+                    reply->set_result("Delete failed!");
+                }
+            } else {
+                reply->set_result("No assigned rights for this object");
+            }
+            cout << endl << user->get_name() << " deleted " << object << endl;
+            cout << servername << "$ " << flush;
+
+            return Status::OK;
+        } else {
+            return Status::CANCELLED;
+        }
+    }
+
+    Status Read(
+        ServerContext* context,
+        const ReadRequest* request,
+        ReadReply* reply
+    ) override {
+        context = context;
+        string username = request->user();
+        string object = request->obj();
+
+        User* user = connected(username);
+        if (user != nullptr) {
+            if (user->has_rights_for_obj(object)) {
+                if (user->allowed_to_read(object)) {
+                    reply->set_result("Read successful!");
+                } else {
+                    reply->set_result("Read failed!");
+                }
+            } else {
+                reply->set_result("No assigned rights for this object");
+            }
+            cout << user->get_name() << " read " << object << endl;
+
+            return Status::OK;
+        } else {
+            return Status::CANCELLED;
+        }
+    }
+
+    Status Write(
+        ServerContext* context,
+        const WriteRequest* request,
+        WriteReply* reply
+    ) override {
+        context = context;
+        string username = request->user();
+        string object = request->obj();
+
+        User* user = connected(username);
+        if (user != nullptr) {
+            if (user->has_rights_for_obj(object)) {
+                if (user->allowed_to_write(object)) {
+                    reply->set_result("Write successful!");
+                } else {
+                    reply->set_result("Write failed!");
+                }
+            } else {
+                reply->set_result("No assigned rights for this object");
+            }
+            cout << user->get_name() << " requested his rights for object "
+                << object << endl;
+            return Status::OK;
+        } else {
+            return Status::CANCELLED;
+        }
+    }
+
+    Status Execute(
+        ServerContext* context,
+        const ExecuteRequest* request,
+        ExecuteReply* reply
+    ) override {
+        context = context;
+        string username = request->user();
+        string object = request->obj();
+
+        User* user = connected(username);
+        if (user != nullptr) {
+            if (user->has_rights_for_obj(object)) {
+                if (user->allowed_to_execute(object)) {
+                    reply->set_result("Execute successful!");
+                } else {
+                    reply->set_result("Execute failed!");
+                }
+            } else {
+                reply->set_result("No assigned rights for this object");
+            }
+            cout << user->get_name() << " requested his rights for object "
+                << object << endl;
             return Status::OK;
         } else {
             return Status::CANCELLED;
@@ -68,7 +254,7 @@ public:
 };
 
 // command line processing
-int clp(int argc, char *argv[]) {
+int clp_server(int argc, char *argv[]) {
     CLI::App app{"Manages users and rights"};
     //CLI11_PARSE(app, result.size(), result.data());
 
@@ -174,17 +360,17 @@ int clp(int argc, char *argv[]) {
                 cerr << "user already exists" << endl;
             }
         } else if (mod_user) {
-            if (manager.contains(user)) {
+            if (connected(user) != nullptr) {
+                cerr << "user logged in, can not change name or password!";
+            } else if (manager.contains(user)) {
                 if (pw.empty() && new_name.empty()) {
                     cerr << "-m,--modify requires at least user or password"
                         << endl;
                 } else {
                     if (!pw.empty()) {
-                        // cout << "pw" << endl;
                         manager.mod_pw(user, pw);
                     }
                     if (!new_name.empty()) {
-                        // cout << "name" << endl;
                         manager.mod_name(user, new_name);
                     }
                 }
@@ -196,10 +382,17 @@ int clp(int argc, char *argv[]) {
                 cerr << "user does not exist" << endl;
             }
         } else if (list_rights) {
-            manager.print_rights(user, obj);
+            if (manager.contains(user)) {
+                manager.print_rights(user, obj);
+            } else {
+                cerr << "Error: user does not exist" << endl;
+            }
         } else if (!obj.empty()) {
-            if (!rights.empty()) {
+            if (!manager.contains(user)) {
+                cerr << "Error: user does not exist" << endl;
+            } else if (!rights.empty()) {
                 if (!manager.set_right(user, obj, rights)) {
+                    cout << user << " " << obj << " " << rights << endl;
                     cerr << "Error: rights are not formatted correctly\n"
                         << " make sure the order matches: rwxd" << endl;
                 }
@@ -212,6 +405,11 @@ int clp(int argc, char *argv[]) {
                 cerr << "object requires 1 of following options: -s,-d,-l"
                     << endl;
             }
+        } else if (!pw.empty() && !add_user && !mod_user) {
+            cerr << "--password requires --add or --modify" << endl;
+        } else if (!user.empty()) {
+            cerr << "--user requires at least one option\n"
+                << "Run with --help for more information." << endl;
         }
     } catch (const CLI::ParseError &e) {
         return app.exit(e);
@@ -245,9 +443,9 @@ void Run() {
     ServerBuilder builder;
 
     grpc::SslServerCredentialsOptions sslOpts{};
-    // für client-seitige Authentifizierung
-    sslOpts.client_certificate_request =
-    GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;
+        /* für client-seitige Authentifizierung
+        sslOpts.client_certificate_request =
+        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;*/
 
     sslOpts.pem_key_cert_pairs.push_back(
        grpc::SslServerCredentialsOptions::PemKeyCertPair{
@@ -258,13 +456,14 @@ void Run() {
 
     auto creds = grpc::SslServerCredentials(sslOpts);
 
-    //grpc::SslServerCredentialsOptions::PemKeyCertPair pkcp ={};
-    //grpc::SslServerCredentialsOptions ssl_opts;
-    //ssl_opts.pem_root_certs="";
-    //ssl_opts.pem_key_cert_pairs.push_back(pkcp);
-    //std::shared_ptr<grpc::ServerCredentials> creds = grpc::SslServerCredentials(grpc::SslServerCredentialsOptions());
+        //grpc::SslServerCredentialsOptions::PemKeyCertPair pkcp ={};
+        //grpc::SslServerCredentialsOptions ssl_opts;
+        //ssl_opts.pem_root_certs="";
+        //ssl_opts.pem_key_cert_pairs.push_back(pkcp);
 
-    builder.AddListeningPort(address, grpc::InsecureServerCredentials());
+    //auto creds = grpc::GoogleRefreshTokenCredentials("");
+
+    builder.AddListeningPort(address, creds);
     builder.RegisterService(&service);
 
     std::unique_ptr<Server> server(builder.BuildAndStart());
@@ -272,14 +471,13 @@ void Run() {
 
     //server->Wait();
 
-    string server_str = "./server";
-    char *server_name = new char[server_str.size()+1];
-    strcpy(server_name, server_str.c_str());
+    char *server_name = new char[servername.size()+1];
+    strcpy(server_name, servername.c_str());
 
     string input;
 
     while (true) {
-        cout << server_name << "$ " << flush;
+        cout << servername << "$ " << flush;
         getline(cin, input);
 
         if (input.length() > 0) {
@@ -295,7 +493,7 @@ void Run() {
                 result.push_back(c);
             }
 
-            clp(result.size(), result.data());
+            clp_server(result.size(), result.data());
         } else {
         }
     }
@@ -310,6 +508,8 @@ int main(int argc, char* argv[]) {
     } catch (const CLI::ParseError &e) {
         return app.exit(e);
     }*/
+
+    servername = argv[0];
 
     Run();
 

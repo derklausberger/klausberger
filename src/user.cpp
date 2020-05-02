@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <map>
 #include <list>
+#include <sstream>
 
 using namespace std;
 
@@ -28,36 +29,57 @@ void User::print() {
     cout << "Name: " << name << " Password: " << pw << endl;
 }
 
-void User::print_rights(string object) {
-    string r = "";
+bool User::has_rights_for_obj(string object) {
+    return (rights.find(object) != rights.end());
+}
 
+string User::get_rights(string object) {
+    stringstream ss;
+
+    ss << "Name: " << name << " Object: " << object << " Rights: ";
     list<Action>* actions = &rights[object];
 
     if (find(actions->begin(), actions->end(), Action::Read) != actions->end()) {
-        r += "r";
+        ss << "r";
     } else {
-        r += "-";
+        ss << "-";
     }
 
     if (find(actions->begin(), actions->end(), Action::Write) != actions->end()) {
-        r += "w";
+        ss << "w";
     } else {
-        r += "-";
+        ss << "-";
     }
 
     if (find(actions->begin(), actions->end(), Action::Execute) != actions->end()) {
-        r += "x";
+        ss << "x";
     } else {
-        r += "-";
+        ss << "-";
     }
 
     if (find(actions->begin(), actions->end(), Action::Delete) != actions->end()) {
-        r += "d";
+        ss << "d";
     } else {
-        r += "-";
+        ss << "-";
     }
 
-    cout << "Name: " << name << " Object: " << object << " Rights: " << r << endl;
+    ss << endl;
+
+    return ss.str();
+}
+
+void User::print_rights(string object) {
+    cout << get_rights(object);
+}
+
+string User::get_rights() {
+    stringstream ss;
+
+    for (auto& obj : rights) {
+        ss << get_rights(obj.first);
+    }
+
+    return ss.str();
 }
 
 void User::print_rights() {
@@ -109,6 +131,26 @@ bool User::set_right(string object, string right) {
     }
 
     return false;
+}
+
+bool User::allowed_to_read(string object) {
+    list<Action>* tmp = &rights[object];
+    return find(tmp->begin(), tmp->end(), Action::Read) != tmp->end();
+}
+
+bool User::allowed_to_write(string object) {
+    list<Action>* tmp = &rights[object];
+    return find(tmp->begin(), tmp->end(), Action::Write) != tmp->end();
+}
+
+bool User::allowed_to_execute(string object) {
+    list<Action>* tmp = &rights[object];
+    return find(tmp->begin(), tmp->end(), Action::Execute) != tmp->end();
+}
+
+bool User::allowed_to_delete(string object) {
+    list<Action>* tmp = &rights[object];
+    return find(tmp->begin(), tmp->end(), Action::Delete) != tmp->end();
 }
 
 bool User::rem_right(string object) {

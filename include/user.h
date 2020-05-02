@@ -37,6 +37,20 @@ public:
     void print_rights(std::string);
 
     void print_rights();
+
+    std::string get_rights(std::string object);
+
+    std::string get_rights();
+
+    bool has_rights_for_obj(std::string object);
+
+    bool allowed_to_read(std::string object);
+
+    bool allowed_to_write(std::string object);
+
+    bool allowed_to_execute(std::string object);
+
+    bool allowed_to_delete(std::string object);
 };
 
 #endif /* end of include guard:  */

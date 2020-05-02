@@ -8,6 +8,11 @@ package um;
 service UM {
     // Function invoked to send the request
     rpc Login (LoginRequest) returns (LoginReply) {}
+    rpc ListRights (ListRequest) returns (ListReply) {}
+    rpc Delete (DeleteRequest) returns (DeleteReply) {}
+    rpc Read (ReadRequest) returns (ReadReply) {}
+    rpc Write (WriteRequest) returns (WriteReply) {}
+    rpc Execute (ExecuteRequest) returns (ExecuteReply) {}
 }
 
 // The request message containing requested answer
@@ -18,5 +23,50 @@ message LoginRequest {
 
 // The response message containing response
 message LoginReply {
+    string result = 1;
+}
+
+message ListRequest {
+    string user = 1;
+    string obj = 2;
+}
+
+message ListReply {
+    string result = 1;
+}
+
+message DeleteRequest {
+    string user = 1;
+    string obj = 2;
+}
+
+message DeleteReply {
+    string result = 1;
+}
+
+message ReadRequest {
+    string user = 1;
+    string obj = 2;
+}
+
+message ReadReply {
+    string result = 1;
+}
+
+message WriteRequest {
+    string user = 1;
+    string obj = 2;
+}
+
+message WriteReply {
+    string result = 1;
+}
+
+message ExecuteRequest {
+    string user = 1;
+    string obj = 2;
+}
+
+message ExecuteReply {
     string result = 1;
 }

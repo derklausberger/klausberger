@@ -18,7 +18,7 @@ generated = gen.process('src/um.proto')
 inc_dir = include_directories('include')
 inc_client = include_directories('include/client')
 
-src_client = ['src/client/main.cpp', generated]
+src_client = ['src/client/main.cpp','src/user.cpp', generated]
 
 executable('client',
            sources : src_client,
@@ -29,10 +29,10 @@ executable('client',
 
 inc_server = include_directories('include/server')
 
-src_client = ['src/server/main.cpp', 'src/user.cpp', 'src/server/manager.cpp', generated]
+src_server = ['src/server/main.cpp', 'src/user.cpp', 'src/server/manager.cpp', generated]
 
 executable('server',
-           sources : src_client,
+           sources : src_server,
            include_directories : [inc_dir, inc_server],
            dependencies : [threads, protobuf_dep, grpc_dep,
            grpcpp_dep]
