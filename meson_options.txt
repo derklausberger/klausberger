@@ -1,0 +1,2 @@
+#option('cli11_include_dir', type : 'string', value : '/home/niklas/Dokumente/Schule/pos/includes/CLI11/', description : 'the include dir of cli11')
+option('spdlog_include_dir', type : 'string', value : '/home/niklas/Desktop/Includes/spdlog/include/', description : 'the include dir of spdlog')

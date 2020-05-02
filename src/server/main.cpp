@@ -2,6 +2,9 @@
 #include "CLI11.hpp"
 #include "manager.h"
 
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/basic_file_sink.h"
+
 #include <grpcpp/grpcpp.h>
 
 #include <iostream>
@@ -32,6 +35,8 @@ using um::WriteRequest;
 using um::WriteReply;
 using um::ExecuteRequest;
 using um::ExecuteReply;
+using um::LogoutRequest;
+using um::LogoutReply;
 
 Manager manager{};
 list<User*> connections;
@@ -54,7 +59,7 @@ private:
 public:
     UmServiceImplementation(Manager* manager_,
         list<User*>* connections_) : manager{manager_},
-        connections{connections_}{}
+        connections{connections_} {}
 
     Status Login(
         ServerContext* context,
@@ -69,7 +74,8 @@ public:
             stringstream reply;
             reply << "login failed!\n" << user << " does not exist!";
 
-            cout << user << " tried to connect! (user does not exist)" << endl;
+            cout << endl;
+            spdlog::warn("{} tried to connect! (user does not exist)", user);
             cout << servername << "$ " << flush;
 
             return Status(StatusCode::CANCELLED, reply.str());
@@ -77,7 +83,8 @@ public:
             stringstream reply;
             reply << "login failed!\nwrong password for " << user;
 
-            cout << user << " tried to connect! (wrong password)" << endl;
+            cout << endl;
+            spdlog::warn("{} tried to connect! (wrong password)", user);
             cout << servername << "$ " << flush;
 
             return Status(StatusCode::CANCELLED, reply.str());
@@ -89,12 +96,13 @@ public:
             reply->set_result("login successful!\nwelcome " + user + "!");
 
             // Output new connection
-            cout << user << " connected!" << endl;
+            cout << endl;
+            spdlog::info("{} connected!", user);
             cout << servername << "$ " << flush;
 
             return Status::OK;
         } else {
-            return Status::CANCELLED;
+            return Status(StatusCode::ABORTED, "");
         }
     }
 
@@ -125,12 +133,16 @@ public:
                 } else {
                     reply->set_result("No assigned rights for this object");
                 }
-                cout << user->get_name() << " requested his rights for object "
-                    << object << endl;
+
+                cout << endl;
+                spdlog::info("{} requested his rights for object {}",
+                    user->get_name(), object);
                 cout << servername << "$ " << flush;
             } else {
                 reply->set_result(user->get_rights());
-                cout << endl << user->get_name() << " requested his rights." << endl;
+
+                cout << endl;
+                spdlog::info("{} requested his rights.", user->get_name());
                 cout << servername << "$ " << flush;
             }
             return Status::OK;
@@ -159,7 +171,8 @@ public:
             } else {
                 reply->set_result("No assigned rights for this object");
             }
-            cout << endl << user->get_name() << " deleted " << object << endl;
+            cout << endl;
+            spdlog::info("{} deleted {}", string(user->get_name()), object);
             cout << servername << "$ " << flush;
 
             return Status::OK;
@@ -188,7 +201,9 @@ public:
             } else {
                 reply->set_result("No assigned rights for this object");
             }
-            cout << user->get_name() << " read " << object << endl;
+            cout << endl;
+            spdlog::info("{} read {}", user->get_name(), object);
+            cout << servername << "$ " << flush;
 
             return Status::OK;
         } else {
@@ -216,8 +231,10 @@ public:
             } else {
                 reply->set_result("No assigned rights for this object");
             }
-            cout << user->get_name() << " requested his rights for object "
-                << object << endl;
+            cout << endl;
+            spdlog::info("{} wrote {}", user->get_name(), object);
+            cout << servername << "$ " << flush;
+
             return Status::OK;
         } else {
             return Status::CANCELLED;
@@ -244,8 +261,33 @@ public:
             } else {
                 reply->set_result("No assigned rights for this object");
             }
-            cout << user->get_name() << " requested his rights for object "
-                << object << endl;
+            cout << endl;
+            spdlog::info("{} executed {}", user->get_name(), object);
+            cout << servername << "$ " << flush;
+
+            return Status::OK;
+        } else {
+            return Status::CANCELLED;
+        }
+    }
+
+    Status Logout(
+        ServerContext* context,
+        const LogoutRequest* request,
+        LogoutReply* reply
+    ) override {
+        context = context;
+        string username = request->user();
+
+        User* user = connected(username);
+        if (user != nullptr) {
+            connections->remove(user);
+
+            reply->set_result("Logout successful!");
+
+            cout << endl;
+            spdlog::info("{} disconnected", user->get_name());
+
             return Status::OK;
         } else {
             return Status::CANCELLED;
@@ -358,6 +400,8 @@ int clp_server(int argc, char *argv[]) {
         } else if (add_user) {
             if (!manager.add(user, pw)) {
                 cerr << "user already exists" << endl;
+            } else {
+                spdlog::info("user {} added", user);
             }
         } else if (mod_user) {
             if (connected(user) != nullptr) {
@@ -369,9 +413,12 @@ int clp_server(int argc, char *argv[]) {
                 } else {
                     if (!pw.empty()) {
                         manager.mod_pw(user, pw);
+                        spdlog::info("password of user {} changed", user);
                     }
                     if (!new_name.empty()) {
                         manager.mod_name(user, new_name);
+                        spdlog::warn("name of user changed from {} to {}", user,
+                            new_name);
                     }
                 }
             } else {
@@ -380,6 +427,8 @@ int clp_server(int argc, char *argv[]) {
         } else if (del_user) {
             if (!manager.del(user)) {
                 cerr << "user does not exist" << endl;
+            } else {
+                spdlog::warn("user {} has been deleted", user);
             }
         } else if (list_rights) {
             if (manager.contains(user)) {
@@ -392,14 +441,20 @@ int clp_server(int argc, char *argv[]) {
                 cerr << "Error: user does not exist" << endl;
             } else if (!rights.empty()) {
                 if (!manager.set_right(user, obj, rights)) {
-                    cout << user << " " << obj << " " << rights << endl;
                     cerr << "Error: rights are not formatted correctly\n"
                         << " make sure the order matches: rwxd" << endl;
+                } else {
+                    spdlog::info("rights for object {} has been set from {}",
+                        obj, user);
                 }
             } else if (rem_rights) {
                 if (!manager.rem_right(user, obj)) {
                     cerr << "Error: no existing rights for user refering to"
                         << " object" << endl;
+                } else {
+                    spdlog::warn(
+                        "rights for object {} has been removed from {}", obj,
+                        user);
                 }
             } else {
                 cerr << "object requires 1 of following options: -s,-d,-l"
@@ -430,44 +485,46 @@ grpc::string readFile(const grpc::string& filename) {
 
   		data = ss.str ();
   	} else {
-        cout << "fehler" << filename << endl;
+        cout << "problem reading file: " << filename << endl;
     }
 
     return data;
 }
 
-void Run() {
+enum class Communication{Insecure, Secure};
+
+void Run(Communication security) {
     std::string address("localhost:8888");
     UmServiceImplementation service{&manager, &connections};
 
     ServerBuilder builder;
 
-    grpc::SslServerCredentialsOptions sslOpts{};
-        /* für client-seitige Authentifizierung
-        sslOpts.client_certificate_request =
-        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;*/
+    auto creds_insec = grpc::InsecureServerCredentials();
 
-    sslOpts.pem_key_cert_pairs.push_back(
-       grpc::SslServerCredentialsOptions::PemKeyCertPair{
-         readFile("../openssl/server.key"),
-         readFile("../openssl/server.crt")});
-    // für client-seitige Authentifizierung
-    //sslOpts.pem_root_certs = readFile("../openssl/client.crt");
+        grpc::SslServerCredentialsOptions sslOpts{};
 
-    auto creds = grpc::SslServerCredentials(sslOpts);
+        sslOpts.pem_key_cert_pairs.push_back(
+           grpc::SslServerCredentialsOptions::PemKeyCertPair{
+             readFile("../openssl/server.key"),
+             readFile("../openssl/server.crt")});
 
-        //grpc::SslServerCredentialsOptions::PemKeyCertPair pkcp ={};
-        //grpc::SslServerCredentialsOptions ssl_opts;
-        //ssl_opts.pem_root_certs="";
-        //ssl_opts.pem_key_cert_pairs.push_back(pkcp);
+    auto creds_sec = grpc::SslServerCredentials(sslOpts);
 
-    //auto creds = grpc::GoogleRefreshTokenCredentials("");
+    if (security == Communication::Secure) {
+        builder.AddListeningPort(address, creds_sec);
+    } else {
+        builder.AddListeningPort(address, creds_insec);
+    }
 
-    builder.AddListeningPort(address, creds);
     builder.RegisterService(&service);
 
     std::unique_ptr<Server> server(builder.BuildAndStart());
-    std::cout << "Server listening on port: " << address << std::endl;
+    spdlog::info("Server listening on port: {}", address);
+
+    /*stringstream pattern;
+    pattern << "[%H:%M:%S] [%^%l%$] %v\n" << servername << "$";
+
+    spdlog::set_pattern(pattern.str());*/
 
     //server->Wait();
 
@@ -494,7 +551,6 @@ void Run() {
             }
 
             clp_server(result.size(), result.data());
-        } else {
         }
     }
 
@@ -502,16 +558,37 @@ void Run() {
 }
 
 int main(int argc, char* argv[]) {
-    /*CLI::App app{"Manages users and rights"};
+    spdlog::set_pattern("[%H:%M:%S] [%^%l%$] %v");
+    CLI::App app{"Sets communiation security"};
+
+    auto comm_group = app.add_option_group("Communication Security")
+        ->require_option(0, 1);
+
+    stringstream ss;
+
+    ss << "use insecure communication [default]";
+    bool insecure = false;
+    comm_group->add_flag("-i,--insecure", insecure, ss.str());
+    ss.str(string());
+
+    ss << "use ssl/tls secured communication";
+    bool secure = false;
+    comm_group->add_flag("-s,--secure", secure, ss.str());
+    ss.str(string());
+
     try {
         app.parse(argc, argv);
     } catch (const CLI::ParseError &e) {
         return app.exit(e);
-    }*/
+    }
 
     servername = argv[0];
 
-    Run();
+    if (secure) {
+        Run(Communication::Secure);
+    } else {
+        Run(Communication::Insecure);
+    }
 
     return 0;
 }

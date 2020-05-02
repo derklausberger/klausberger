@@ -2,12 +2,16 @@
 #include "CLI11.hpp"
 #include "user.h"
 
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/basic_file_sink.h"
+
 #include <grpcpp/grpcpp.h>
 
 #include <string>
 #include <fstream>
 #include <limits>
 #include <sstream>
+#include <signal.h>
 
 using namespace std;
 
@@ -29,19 +33,26 @@ using um::WriteRequest;
 using um::WriteReply;
 using um::ExecuteRequest;
 using um::ExecuteReply;
+using um::LogoutRequest;
+using um::LogoutReply;
 
 class UmClient {
     private:
         unique_ptr<UM::Stub> stub;
+        string user;
     public:
         UmClient(shared_ptr<Channel> channel)
             // Create a stub on the channel
             : stub(UM::NewStub(channel)) {}
 
-    int Login(string user, string pw) {
+    string get_username(){
+        return user;
+    }
+
+    int Login(string username, string pw) {
         LoginRequest request;
 
-        request.set_user(user);
+        request.set_user(username);
         request.set_pw(pw);
 
         LoginReply reply;
@@ -52,6 +63,7 @@ class UmClient {
         grpc::Status status = stub->Login(&context, request, &reply);
 
         if (status.ok()){
+            user = username;
             cout << "Answer received: "
                 << reply.result() << endl;
             return 0;
@@ -59,11 +71,13 @@ class UmClient {
             cout << "Answer received: "
                 << status.error_code() << ": " << status.error_message()
                 << endl;
+            return 1;
+        } else {
             return -1;
         }
     }
 
-    string ListRights(string user, string obj) {
+    string ListRights(string obj) {
         ListRequest request;
 
         request.set_user(user);
@@ -172,9 +186,33 @@ class UmClient {
             return "-1";
         }
     }
+
+    string Logout() {
+        LogoutRequest request;
+
+        request.set_user(user);
+
+        LogoutReply reply;
+
+        ClientContext context;
+
+        // Make actual RPC calls on the stub.
+        grpc::Status status = stub->Logout(&context, request, &reply);
+
+        if (status.ok()) {
+            cout << reply.result();
+            return reply.result();
+        } else {
+            cout << status.error_code() << ": " << status.error_message()
+                << endl;
+            return "-1";
+        }
+    }
 };
 
-int clp_user(int argc, char *argv[], UmClient* client) {
+UmClient* client = nullptr;
+
+int clp_user(int argc, char *argv[]) {
     CLI::App app{"Manages users and rights"};
 
     auto operations = app.add_option_group("Operations")
@@ -218,6 +256,11 @@ int clp_user(int argc, char *argv[], UmClient* client) {
     operations->add_flag("-d,--delete", del, ss.str())->needs(obj_opt);
     ss.str(string());
 
+    ss << "logout user and exit programm";
+    bool logout = false;
+    operations->add_flag("--logout", del, ss.str())->excludes(obj_opt);
+    ss.str(string());
+
     /*ss << "Select user by name\n"
        << " (list existing users with -l,--list,\n"
        << " modify with -m, --modify\n"
@@ -229,17 +272,19 @@ int clp_user(int argc, char *argv[], UmClient* client) {
 
     try {
         app.parse(argc, argv);
-
-        if (list) {
-            cout << client->ListRights(argv[0], obj);
+        if (logout) {
+            client->Logout();
+            exit(0);
+        } else if (list) {
+            cout << client->ListRights(obj);
         } else if (del) {
-            cout << client->Delete(argv[0], obj) << endl;
+            cout << client->Delete(client->get_username(), obj) << endl;
         } else if (read) {
-            cout << client->Read(argv[0], obj) << endl;
+            cout << client->Read(client->get_username(), obj) << endl;
         } else if (exe) {
-            cout << client->Execute(argv[0], obj) << endl;
+            cout << client->Execute(client->get_username(), obj) << endl;
         } else if (write) {
-            cout << client->Write(argv[0], obj) << endl;
+            cout << client->Write(client->get_username(), obj) << endl;
         } else if (!obj.empty()) {
             cerr << "--object: requires one option of Option-Group: Operation\n"
                 << "Run with --help for more information." << endl;
@@ -263,37 +308,36 @@ grpc::string readFile(const grpc::string& filename) {
 
   		data = ss.str ();
   	} else {
-        cout << "fehler" << endl;
+        cout << "problem reading file: " << filename << endl;
     }
 
     return data;
 }
 
-void Run() {
+void exiting() {
+    std::cout << "Exiting";
+}
+
+void signal_handler(int signum) {
+    cout << "logging off..." << endl;
+    client->Logout();
+    exit(signum);
+}
+
+void run_ssl() {
     string address("localhost:8888");
 
     grpc::SslCredentialsOptions sslOpts;
     sslOpts.pem_root_certs = readFile("../openssl/server.crt");
 
-    // für client-seitige Authentifizierung
-    sslOpts.pem_private_key = readFile("../openssl/client.key");
-    sslOpts.pem_cert_chain = readFile("../openssl/client.crt");
-
-    // Create a default SSL ChannelCredentials object.
-    auto ssl_channel_creds
-        = grpc::SslCredentials(sslOpts);
-
-
-
-    // Create a default Google ChannelCredentials object.
-    //auto gtb_channel_creds = grpc::GoogleDefaultCredentials();
-
-    auto channel_creds = grpc::InsecureChannelCredentials();
+    // Create an SSL ChannelCredentials object.
+    auto channel_creds = grpc::SslCredentials(sslOpts);
 
     // Create a channel using the credentials created in the previous step.
-    auto channel = grpc::CreateChannel(address, ssl_channel_creds);
+    auto channel = grpc::CreateChannel(address, channel_creds);
 
-    UmClient client(channel);
+    UmClient c(channel);
+    client = &c;
 
     int response = -1;
 
@@ -308,8 +352,16 @@ void Run() {
         cout << "password: ";
     	cin >> pw;
 
-        response = client.Login(user, pw);
+        response = client->Login(user, pw);
+
+        if (response == -1) {
+            cout << "no server with your communication type running\n"
+                << "try restarting client --help" << endl;
+            exit(-1);
+        }
     }
+
+    signal(SIGINT, signal_handler);
 
     char *username = new char[user.size()+1];
     strcpy(username, user.c_str());
@@ -332,14 +384,100 @@ void Run() {
                 result.push_back(c);
             }
 
-            clp_user(result.size(), result.data(), &client);
+            clp_user(result.size(), result.data());
         } else {
         }
     }
 }
 
-int main(){
-    Run();
+void run_ins() {
+    string address("localhost:8888");
+
+    // Create a default Insecure ChannelCredentials object.
+    auto channel_creds = grpc::InsecureChannelCredentials();
+
+    // Create a channel using the credentials created in the previous step.
+    auto channel = grpc::CreateChannel(address, channel_creds);
+
+    UmClient c(channel);
+    client = &c;
+
+    int response = 1;
+
+    string user;
+    string pw;
+
+    while (response != 0) {
+
+    	cout << "username: ";
+    	cin >> user;
+
+        cout << "password: ";
+    	cin >> pw;
+
+        response = client->Login(user, pw);
+
+        if (response == -1) {
+            cout << "no server with your communication type running\n"
+                << "restarting client with --help" << endl;
+            exit(-1);
+        }
+    }
+
+    signal(SIGINT, signal_handler);
+
+    char *username = new char[user.size()+1];
+    strcpy(username, user.c_str());
+    string input;
+    cin.ignore();
+    while (true) {
+        cout << user << "$ " << flush;
+        getline(cin, input);
+
+        if (input.length() > 0) {
+            vector<char *> result;
+            istringstream iss(input);
+
+            result.push_back(username);
+
+            for(string s; iss >> s;) {
+                char *c = new char[s.size() + 1];
+                strcpy(c, s.c_str());
+
+                result.push_back(c);
+            }
+
+            clp_user(result.size(), result.data());
+        } else {
+        }
+    }
+}
+
+int main(int argc, char* argv[]){
+    CLI::App app{"Sets communiation security"};
+
+    auto comm_group = app.add_option_group("Communication Security")
+        ->require_option(0, 1);
+
+    stringstream ss;
+
+    ss << "use insecure communication [default]";
+    bool insecure = false;
+    comm_group->add_flag("-i,--insecure", insecure, ss.str());
+    ss.str(string());
+
+    ss << "use ssl/tls secured communication";
+    bool secure = false;
+    comm_group->add_flag("-s,--secure", secure, ss.str());
+    ss.str(string());
+
+    try {
+        app.parse(argc, argv);
+    } catch (const CLI::ParseError &e) {
+        return app.exit(e);
+    }
+
+    secure ? run_ssl() : run_ins();
 
     return 0;
 }

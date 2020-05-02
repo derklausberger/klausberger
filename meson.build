@@ -15,7 +15,7 @@ gen = generator(protoc, \
 
 generated = gen.process('src/um.proto')
 
-inc_dir = include_directories('include')
+inc_dir = include_directories(['include', get_option('spdlog_include_dir')])
 inc_client = include_directories('include/client')
 
 src_client = ['src/client/main.cpp','src/user.cpp', generated]

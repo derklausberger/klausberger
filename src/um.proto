@@ -13,6 +13,7 @@ service UM {
     rpc Read (ReadRequest) returns (ReadReply) {}
     rpc Write (WriteRequest) returns (WriteReply) {}
     rpc Execute (ExecuteRequest) returns (ExecuteReply) {}
+    rpc Logout (LogoutRequest) returns (LogoutReply) {}
 }
 
 // The request message containing requested answer
@@ -68,5 +69,13 @@ message ExecuteRequest {
 }
 
 message ExecuteReply {
+    string result = 1;
+}
+
+message LogoutRequest {
+    string user = 1;
+}
+
+message LogoutReply {
     string result = 1;
 }
