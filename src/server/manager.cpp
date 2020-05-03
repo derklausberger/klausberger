@@ -53,7 +53,6 @@ bool Manager::mod_name(string name, string new_name) {
         return true;
     }
 
-    std::cout << "hallo" << std::endl;
     return false;
 }
 
@@ -88,7 +87,7 @@ bool Manager::rem_right(string name, string object) {
     return false;
 }
 
-void Manager::print_rights(string name, string object) {
+bool Manager::print_rights(string name, string object) {
     User* user = get_user(name);
 
     if (user != nullptr) {
@@ -97,7 +96,11 @@ void Manager::print_rights(string name, string object) {
         } else {
             user->print_rights();
         }
+
+        return true;
     }
+
+    return false;
 }
 
 bool Manager::login(string name, string pw) {

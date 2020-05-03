@@ -314,30 +314,37 @@ grpc::string readFile(const grpc::string& filename) {
     return data;
 }
 
-void exiting() {
-    std::cout << "Exiting";
-}
-
 void signal_handler(int signum) {
     cout << "logging off..." << endl;
     client->Logout();
     exit(signum);
 }
 
-void run_ssl() {
+enum class Communication{Insecure, Secure};
+
+void Run(Communication security) {
     string address("localhost:8888");
 
-    grpc::SslCredentialsOptions sslOpts;
-    sslOpts.pem_root_certs = readFile("../openssl/server.crt");
+    if (security == Communication::Secure) {
+        grpc::SslCredentialsOptions sslOpts;
+        sslOpts.pem_root_certs = readFile("../openssl/server.crt");
 
-    // Create an SSL ChannelCredentials object.
-    auto channel_creds = grpc::SslCredentials(sslOpts);
+        // Create an SSL ChannelCredentials object.
+        auto channel_creds = grpc::SslCredentials(sslOpts);
 
-    // Create a channel using the credentials created in the previous step.
-    auto channel = grpc::CreateChannel(address, channel_creds);
+        // Create a channel using the credentials created in the previous step.
+        auto channel = grpc::CreateChannel(address, channel_creds);
 
-    UmClient c(channel);
-    client = &c;
+        client = new UmClient(channel);
+    } else {
+        // Create a default Insecure ChannelCredentials object.
+        auto channel_creds = grpc::InsecureChannelCredentials();
+
+        // Create a channel using the credentials created in the previous step.
+        auto channel = grpc::CreateChannel(address, channel_creds);
+
+        client = new UmClient(channel);
+    }
 
     int response = -1;
 
@@ -357,69 +364,6 @@ void run_ssl() {
         if (response == -1) {
             cout << "no server with your communication type running\n"
                 << "try restarting client --help" << endl;
-            exit(-1);
-        }
-    }
-
-    signal(SIGINT, signal_handler);
-
-    char *username = new char[user.size()+1];
-    strcpy(username, user.c_str());
-    string input;
-    cin.ignore();
-    while (true) {
-        cout << user << "$ " << flush;
-        getline(cin, input);
-
-        if (input.length() > 0) {
-            vector<char *> result;
-            istringstream iss(input);
-
-            result.push_back(username);
-
-            for(string s; iss >> s;) {
-                char *c = new char[s.size() + 1];
-                strcpy(c, s.c_str());
-
-                result.push_back(c);
-            }
-
-            clp_user(result.size(), result.data());
-        } else {
-        }
-    }
-}
-
-void run_ins() {
-    string address("localhost:8888");
-
-    // Create a default Insecure ChannelCredentials object.
-    auto channel_creds = grpc::InsecureChannelCredentials();
-
-    // Create a channel using the credentials created in the previous step.
-    auto channel = grpc::CreateChannel(address, channel_creds);
-
-    UmClient c(channel);
-    client = &c;
-
-    int response = 1;
-
-    string user;
-    string pw;
-
-    while (response != 0) {
-
-    	cout << "username: ";
-    	cin >> user;
-
-        cout << "password: ";
-    	cin >> pw;
-
-        response = client->Login(user, pw);
-
-        if (response == -1) {
-            cout << "no server with your communication type running\n"
-                << "restarting client with --help" << endl;
             exit(-1);
         }
     }
@@ -477,7 +421,7 @@ int main(int argc, char* argv[]){
         return app.exit(e);
     }
 
-    secure ? run_ssl() : run_ins();
+    secure ? Run(Communication::Secure) : Run(Communication::Insecure);
 
     return 0;
 }

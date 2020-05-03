@@ -296,7 +296,7 @@ public:
 };
 
 // command line processing
-int clp_server(int argc, char *argv[]) {
+int clp_server(int argc, char* argv[]) {
     CLI::App app{"Manages users and rights"};
     //CLI11_PARSE(app, result.size(), result.data());
 

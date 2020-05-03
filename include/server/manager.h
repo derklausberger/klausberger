@@ -28,11 +28,11 @@ public:
 
     bool rem_right(std::string, std::string);
 
-    void print_rights(std::string, std::string);
+    bool print_rights(std::string, std::string);
 
     bool login(std::string, std::string);
 
     User* get_user(std::string);
 };
 
-#endif /* end of inclde guard:  */
+#endif /* end of include guard:  */
